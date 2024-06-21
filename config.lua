@@ -6,8 +6,8 @@ Config.Pager = {
         broadcastToJobs = {
             ["police"]=true,
         },
-        broadcastToRoles = nil, -- Uses pv-discord-uac; set to nil to ignore
-        discordPermissions = nil, -- Uses pv-discord-uac; set to nil to ignore
+        broadcastToRoles = nil,
+        discordPermissions = nil,
         jobPermissions = nil,
         webhooks = {
             ["a"]="<@9189297405006602> new pager received!"
@@ -18,9 +18,9 @@ Config.Pager = {
         broadcastToJobs = {
             ["police"]=true,
         },
-        broadcastToRoles = nil, -- Uses pv-discord-uac; set to nil to ignore
-        discordPermissions = nil, -- Uses pv-discord-uac; set to nil to ignore
-        jobPermissions = { -- set to nil to ignore jobs
+        broadcastToRoles = nil,
+        discordPermissions = nil,
+        jobPermissions = {
             "police"
         },
         webhooks = {
@@ -32,9 +32,9 @@ Config.Pager = {
         broadcastToJobs = {
             ["ambulance"]=true,
         },
-        broadcastToRoles = nil, -- Uses pv-discord-uac; set to nil to ignore
-        discordPermissions = nil, -- Uses pv-discord-uac; set to nil to ignore
-        jobPermissions = { -- set to nil to ignore jobs
+        broadcastToRoles = nil,
+        discordPermissions = nil,
+        jobPermissions = {
             "ambulance"
         },
         webhooks = {
@@ -46,8 +46,8 @@ Config.Pager = {
         broadcastToJobs = {
             ["ambulance"]=true,
         },
-        broadcastToRoles = nil, -- Uses pv-discord-uac; set to nil to ignore
-        discordPermissions = nil, -- Uses pv-discord-uac; set to nil to ignore
+        broadcastToRoles = nil,
+        discordPermissions = nil,
         jobPermissions = nil,
         webhooks = {
             ["a"]="<@9189297405006602> new pager received!"
