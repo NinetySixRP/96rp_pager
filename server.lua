@@ -126,33 +126,50 @@ end
 
 function UpdateDatabase()
 	for currentCitizenID, currentPagerData in pairs(pagersList) do
-        for otherCitizenID, otherPagerData in pairs(pagersList) do
-            local removedData = {}
-            for i = 1, #currentPagerData.contacts do
-                local currentContact = currentPagerData.contacts[i]
+        local removedData = {}
 
-                if currentContact.isNew ~= nil and currentContact.number == otherPagerData.number then
-                    local newID = GetNewID('pager_contacts')
-                    MySQL.insert.await('INSERT INTO pager_contacts (id, name, user) VALUES (?, ?, ?)', {newID, currentContact.name, otherCitizenID})
-                    MySQL.insert.await('INSERT INTO pager_contacts_users (user, contact) VALUES (?, ?)', {currentCitizenID, newID})
-                    currentContact.isNew = nil
-                    currentContact.id = newID
-                    currentContact.contactCitizenID = otherCitizenID
-                    print(string.format("added #%s %s as %s to %s contacts", newID, otherCitizenID, currentContact.name, currentCitizenID))
-                end
-                -- print(currentContact.contactCitizenID .. "" .. otherCitizenID)
-                -- print(currentContact.removed)
-                -- print("---")
-                if currentContact.removed ~= nil and currentContact.contactCitizenID == otherCitizenID then
-                    MySQL.single.await('DELETE FROM pager_contacts_users WHERE contact = ?', {currentContact.id})
-                    MySQL.single.await('DELETE FROM pager_contacts WHERE id = ?', {currentContact.id})
-                    table.insert(removedData, i)
-                    print(string.format("removed #%s %s contact from %s", currentContact.id, otherCitizenID, currentCitizenID))
-                end
+        for i = 1, #currentPagerData.contacts do
+            local currentContact = currentPagerData.contacts[i]
+            local contactCitizenID = MySQL.single.await('SELECT citizenid FROM pager_users WHERE number = ?', {currentContact.number})['citizenid']
+
+            -- new contact
+            if currentContact.isNew ~= nil then
+                local newID = GetNewID('pager_contacts')
+                MySQL.insert.await('INSERT INTO pager_contacts (id, name, user) VALUES (?, ?, ?)', {newID, currentContact.name, contactCitizenID})
+                MySQL.insert.await('INSERT INTO pager_contacts_users (user, contact) VALUES (?, ?)', {currentCitizenID, newID})
+                currentContact.isNew = nil
+                currentContact.id = newID
+                currentContact.contactCitizenID = contactCitizenID
+                print(string.format("added #%s %s as %s to %s contacts", newID, contactCitizenID, currentContact.name, currentCitizenID))
             end
+
+            -- removed contact
+            if currentContact.removed ~= nil then
+                MySQL.single.await('DELETE FROM pager_contacts_users WHERE contact = ?', {currentContact.id})
+                MySQL.single.await('DELETE FROM pager_contacts WHERE id = ?', {currentContact.id})
+                table.insert(removedData, i)
+                print(string.format("removed #%s %s contact from %s", currentContact.id, contactCitizenID, currentCitizenID))
+            end
+            
+            -- updated contact
+            if currentContact.isUpdated ~= nil then
+                MySQL.update.await('UPDATE pager_contacts SET name = ? WHERE id = ?', { currentContact.name, currentContact.id})
+                currentContact.isUpdated = nil
+                print(string.format("updated #%s %s contact from %s", currentContact.id, contactCitizenID, currentCitizenID))
+            end
+        end
+
+        --remove contacts localy
+        for i = 1, #removedData do
+            table.remove(currentPagerData.contacts, removedData[i])
+        end
+
+        for otherCitizenID, otherPagerData in pairs(pagersList) do
 
             for i = 1, #currentPagerData.messages do
                 local currentMessage = currentPagerData.messages[i]
+
+                -- check for new message and search for right pager data from contact
                 if currentMessage.isNew and otherPagerData.number == currentMessage.number then
                     local newID = GetNewID('pager_messages')
                     MySQL.insert.await('INSERT INTO pager_messages (id, message, user) VALUES (?, ?, ?)', {newID , currentMessage.text, otherCitizenID})
@@ -160,10 +177,6 @@ function UpdateDatabase()
                     currentMessage.isNew = nil
                     print(string.format("added #%s message from %s to %s", newID, otherCitizenID, currentCitizenID))
                 end
-            end
-
-            for i = 1, #removedData do
-                table.remove(currentPagerData.contacts, removedData[i])
             end
         end
 	end
@@ -173,14 +186,75 @@ end
 -- Callback to get pager data from server
 --------------------------------------------------------------------------
 lib.callback.register('96rp-pager:server:GetPagerData', function(source)
+    -- wait until player is loaded
     while exports.qbx_core:GetPlayer(source) == nil do
         Wait(100)
     end
+
+    -- wait until pagerd data is loaded
     local citizenid = exports.qbx_core:GetPlayer(source).PlayerData.citizenid
     while pagersList[citizenid] == nil do
         Wait(100)
     end
     return pagersList[citizenid]
+end)
+
+--------------------------------------------------------------------------
+-- Saves a new contact
+--------------------------------------------------------------------------
+RegisterNetEvent('96rp-pager:server:SaveContact', function(name, number)
+    local src = source
+    local citizenid = exports.qbx_core:GetPlayer(src).PlayerData.citizenid
+    local contacts = pagersList[citizenid].contacts
+    local contactAlreadyExists = false
+
+    -- check if contact already exists
+    for i = 1, #contacts do
+        local contact = contacts[i]
+        if contact.number == number then
+            contactAlreadyExists = true
+
+            --if contacts has the same name, dont change entithing else change name
+            if contact.name ~= name then
+                contact.name = name
+                contact.isUpdated = true
+            end
+            contact.removed = nil
+        end
+    end
+
+    -- save contact if new
+    if not contactAlreadyExists then
+        table.insert(contacts, #contacts + 1, {
+            name = name,
+            number = number,
+            isNew = true
+        })
+    end
+end)
+
+--------------------------------------------------------------------------
+-- Removes given contact
+--------------------------------------------------------------------------
+RegisterNetEvent('96rp-pager:server:RemoveContact', function(number)
+    local src = source
+    local citizenid = exports.qbx_core:GetPlayer(src).PlayerData.citizenid
+    local contacts = pagersList[citizenid].contacts
+
+    for id, contact in pairs(contacts) do
+
+        if contact.number == number then
+
+            -- if contact exists only localy
+            if contact.id == nil then
+                table.remove(contacts, id)
+
+            -- if contact exists in db
+            elseif contact.removed ~= true then
+                contacts[id].removed = true
+            end
+        end
+    end
 end)
 
 --------------------------------------------------------------------------
@@ -190,20 +264,32 @@ RegisterCommand("pager", function(source, args, rawCommand)
     local citizenid = exports.qbx_core:GetPlayer(source).PlayerData.citizenid
     local pagerUser = pagersList[citizenid]
     local contact = args[1]
+
+    -- check if contact is a name or number
     if tonumber(contact) == nil then
+
         for _, contactData in pairs(pagerUser.contacts) do
+
+            -- check if name actually exists in contacts (upper to prevent upper/lower errors)
             if string.upper(contactData.name) == string.upper(contact) then
                 contact = contactData.number
             end
         end
     end
+
+    -- merges all words after contact into one string
     local message = args[2]
+
     for i = 3, #args
     do
         message = message .. " " .. args[i]
     end
+
     local userFound = false
+
     for currentCitizenid, values in pairs(pagersList) do
+
+        -- check if user exists (and is online too)
         if values.number == tonumber(contact) then
             local messages = pagersList[currentCitizenid].messages
             local chatType = 'Private message'
@@ -219,6 +305,8 @@ RegisterCommand("pager", function(source, args, rawCommand)
             userFound = true
         end
     end
+
+    -- if user not found, check in config for dispatch services or groupchats
     if not userFound then
         local pagerTune = Config.Pager[contact];
 
@@ -289,44 +377,6 @@ RegisterCommand("pager", function(source, args, rawCommand)
         SendToDiscord(Config.LogWebhook,pagerTune.title, message, "New pager!",source,true);
     end
 end, false)
-
---------------------------------------------------------------------------
--- Saves a new contact
---------------------------------------------------------------------------
-RegisterNetEvent('96rp-pager:server:SaveContact', function(name, number)
-    local src = source
-    local citizenid = exports.qbx_core:GetPlayer(src).PlayerData.citizenid
-    local contacts = pagersList[citizenid].contacts
-
-    table.insert(contacts, #contacts + 1, {
-        name = name,
-        number = number,
-        isNew = true
-    })
-end)
-
---------------------------------------------------------------------------
--- Removes given contact
---------------------------------------------------------------------------
-RegisterNetEvent('96rp-pager:server:RemoveContact', function(number)
-    local src = source
-    local citizenid = exports.qbx_core:GetPlayer(src).PlayerData.citizenid
-    local contacts = pagersList[citizenid].contacts
-
-    for id, contact in pairs(contacts) do
-        if contact.number == number then
-            if contact.id == nil then
-                table.remove(contacts, id)
-                print("remove local")
-                print(json.encode(contact))
-            elseif contact.removed ~= true then
-                contacts[id].removed = true
-                print("remove db")
-                print(json.encode(contact))
-            end
-        end
-    end
-end)
 
 function SendToDiscord(url,title,text, content,src, admin)
     local embed = {
