@@ -1,5 +1,16 @@
 local pagersList = {}
 
+CreateThread(function()
+    local waitTime = 20000--600000
+    while true do
+        print("--------------------------")
+        print("update database check")
+        UpdateDatabase()
+        print("--------------------------")
+        Wait(waitTime)
+    end
+end)
+
 --------------------------------------------------------------------------
 -- Get pager data after a player joined and finished loaded
 --------------------------------------------------------------------------
@@ -21,6 +32,18 @@ AddEventHandler('onResourceStart', function(resourceName)
         local citizenid = exports.qbx_core:GetPlayer(id).PlayerData.citizenid
         GetPagerData(citizenid, id)
     end
+end)
+
+RegisterCommand("savePagers", function(source, args, rawCommand)
+	UpdateDatabase()
+end, true) 
+
+AddEventHandler('txAdmin:events:scheduledRestart', function(eventData)
+	UpdateDatabase()
+end)
+
+AddEventHandler('txAdmin:events:serverShuttingDown', function()
+	UpdateDatabase()
 end)
 
 --------------------------------------------------------------------------
@@ -66,7 +89,7 @@ end
 -- Returns all contacts the player has
 --------------------------------------------------------------------------
 function GetContacts(citizenid)
-    local response = MySQL.query.await('SELECT pager_contacts.name, pager_users.number, pager_contacts.user FROM pager_contacts, pager_contacts_users, pager_users WHERE pager_contacts_users.user = ? AND pager_contacts.id = pager_contacts_users.contact AND pager_users.citizenid = pager_contacts.user', {citizenid})
+    local response = MySQL.query.await('SELECT pager_contacts.id, pager_contacts.name, pager_users.number, pager_contacts.user as contactCitizenID FROM pager_contacts, pager_contacts_users, pager_users WHERE pager_contacts_users.user = ? AND pager_contacts.id = pager_contacts_users.contact AND pager_users.citizenid = pager_contacts.user', {citizenid})
     return response
 end
 
@@ -99,6 +122,51 @@ function CreateRandomNumber()
     end
 
     return number
+end
+
+function UpdateDatabase()
+	for currentCitizenID, currentPagerData in pairs(pagersList) do
+        for otherCitizenID, otherPagerData in pairs(pagersList) do
+            local removedData = {}
+            for i = 1, #currentPagerData.contacts do
+                local currentContact = currentPagerData.contacts[i]
+
+                if currentContact.isNew ~= nil and currentContact.number == otherPagerData.number then
+                    local newID = GetNewID('pager_contacts')
+                    MySQL.insert.await('INSERT INTO pager_contacts (id, name, user) VALUES (?, ?, ?)', {newID, currentContact.name, otherCitizenID})
+                    MySQL.insert.await('INSERT INTO pager_contacts_users (user, contact) VALUES (?, ?)', {currentCitizenID, newID})
+                    currentContact.isNew = nil
+                    currentContact.id = newID
+                    currentContact.contactCitizenID = otherCitizenID
+                    print(string.format("added #%s %s as %s to %s contacts", newID, otherCitizenID, currentContact.name, currentCitizenID))
+                end
+                -- print(currentContact.contactCitizenID .. "" .. otherCitizenID)
+                -- print(currentContact.removed)
+                -- print("---")
+                if currentContact.removed ~= nil and currentContact.contactCitizenID == otherCitizenID then
+                    MySQL.single.await('DELETE FROM pager_contacts_users WHERE contact = ?', {currentContact.id})
+                    MySQL.single.await('DELETE FROM pager_contacts WHERE id = ?', {currentContact.id})
+                    table.insert(removedData, i)
+                    print(string.format("removed #%s %s contact from %s", currentContact.id, otherCitizenID, currentCitizenID))
+                end
+            end
+
+            for i = 1, #currentPagerData.messages do
+                local currentMessage = currentPagerData.messages[i]
+                if currentMessage.isNew and otherPagerData.number == currentMessage.number then
+                    local newID = GetNewID('pager_messages')
+                    MySQL.insert.await('INSERT INTO pager_messages (id, message, user) VALUES (?, ?, ?)', {newID , currentMessage.text, otherCitizenID})
+                    MySQL.insert.await('INSERT INTO pager_messages_users (user, message) VALUES (?, ?)', {currentCitizenID, newID})
+                    currentMessage.isNew = nil
+                    print(string.format("added #%s message from %s to %s", newID, otherCitizenID, currentCitizenID))
+                end
+            end
+
+            for i = 1, #removedData do
+                table.remove(currentPagerData.contacts, removedData[i])
+            end
+        end
+	end
 end
 
 --------------------------------------------------------------------------
@@ -137,10 +205,17 @@ RegisterCommand("pager", function(source, args, rawCommand)
     local userFound = false
     for currentCitizenid, values in pairs(pagersList) do
         if values.number == tonumber(contact) then
-            local newID = GetNewID('pager_messages')
-            MySQL.insert.await('INSERT INTO pager_messages (id, message, user) VALUES (?, ?, ?)', {newID , message, citizenid})
-            MySQL.insert.await('INSERT INTO pager_messages_users (user, message) VALUES (?, ?)', {currentCitizenid, newID})
-            TriggerClientEvent('96rp-pager:pager:received', values.serverid, pagerUser.number, 'Private message', message)
+            local messages = pagersList[currentCitizenid].messages
+            local chatType = 'Private message'
+
+            table.insert(messages, #messages + 1, {
+                number = pagerUser.number,
+                chatType = chatType,
+                text = message,
+                isNew = true
+            })
+            
+            TriggerClientEvent('96rp-pager:pager:received', values.serverid, pagerUser.number, chatType, message)
             userFound = true
         end
     end
@@ -220,12 +295,14 @@ end, false)
 --------------------------------------------------------------------------
 RegisterNetEvent('96rp-pager:server:SaveContact', function(name, number)
     local src = source
-    local newID = GetNewID('pager_contacts')
     local citizenid = exports.qbx_core:GetPlayer(src).PlayerData.citizenid
+    local contacts = pagersList[citizenid].contacts
 
-    local row = MySQL.single.await('SELECT citizenid FROM pager_users WHERE number = ?', {number})
-    MySQL.insert.await('INSERT INTO pager_contacts (id, name, user) VALUES (?, ?, ?)', {newID , string.upper(name), row['citizenid']})
-    MySQL.insert.await('INSERT INTO pager_contacts_users (user, contact) VALUES (?, ?)', {citizenid, newID})
+    table.insert(contacts, #contacts + 1, {
+        name = name,
+        number = number,
+        isNew = true
+    })
 end)
 
 --------------------------------------------------------------------------
@@ -234,11 +311,21 @@ end)
 RegisterNetEvent('96rp-pager:server:RemoveContact', function(number)
     local src = source
     local citizenid = exports.qbx_core:GetPlayer(src).PlayerData.citizenid
+    local contacts = pagersList[citizenid].contacts
 
-    local contactid = MySQL.single.await('SELECT pager_contacts.id FROM pager_contacts, pager_contacts_users WHERE pager_contacts.id = pager_contacts_users.contact AND pager_contacts_users.user = ? AND  pager_contacts.user = (SELECT citizenid FROM pager_users WHERE number = ?)', {citizenid, number})['id']
-
-    MySQL.single.await('DELETE FROM pager_contacts_users WHERE contact = ?', {contactid})
-    MySQL.single.await('DELETE FROM pager_contacts WHERE id = ?', {contactid})
+    for id, contact in pairs(contacts) do
+        if contact.number == number then
+            if contact.id == nil then
+                table.remove(contacts, id)
+                print("remove local")
+                print(json.encode(contact))
+            elseif contact.removed ~= true then
+                contacts[id].removed = true
+                print("remove db")
+                print(json.encode(contact))
+            end
+        end
+    end
 end)
 
 function SendToDiscord(url,title,text, content,src, admin)

@@ -55,6 +55,12 @@ Config.Pager = {
     }
 };
 
+Config.Animation = {
+    dict = 'anim@amb@business@bgen@bgen_no_work@',
+    name = 'stand_phone_phoneputdown_wakeup_phone01',
+    flag = 0
+}
+
 Config.LogWebhook = "";
 
 -- Ingame limit: 63 characters
