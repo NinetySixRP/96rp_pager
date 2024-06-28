@@ -1,5 +1,9 @@
 local pagersList = {}
 
+
+--------------------------------------------------------------------------
+-- Database updates
+--------------------------------------------------------------------------
 CreateThread(function()
     local waitTime = 20000--600000
     while true do
@@ -15,8 +19,10 @@ end)
 -- Get pager data after a player joined and finished loaded
 --------------------------------------------------------------------------
 RegisterNetEvent('QBCore:Server:OnPlayerLoaded', function() 
-    local citizenId = exports.qbx_core:GetPlayer(source).PlayerData.citizenid
-    GetPagerData(citizenId, source)
+    local src = source
+    local citizenId = exports.qbx_core:GetPlayer(src).PlayerData.citizenid
+    GetPagerData(citizenId, src)
+    Player(src).state.pagerObj = nil
 end)
 
 --------------------------------------------------------------------------
@@ -31,17 +37,27 @@ AddEventHandler('onResourceStart', function(resourceName)
     for id, obj in pairs(players) do
         local citizenid = exports.qbx_core:GetPlayer(id).PlayerData.citizenid
         GetPagerData(citizenid, id)
+        Player(id).state.pagerObj = nil
     end
 end)
 
+--------------------------------------------------------------------------
+-- Admin command to save pager data
+--------------------------------------------------------------------------
 RegisterCommand("savePagers", function(source, args, rawCommand)
 	UpdateDatabase()
 end, true) 
 
+--------------------------------------------------------------------------
+-- Save data on restart schedule
+--------------------------------------------------------------------------
 AddEventHandler('txAdmin:events:scheduledRestart', function(eventData)
 	UpdateDatabase()
 end)
 
+--------------------------------------------------------------------------
+-- Save data before shutting down
+--------------------------------------------------------------------------
 AddEventHandler('txAdmin:events:serverShuttingDown', function()
 	UpdateDatabase()
 end)
@@ -124,6 +140,9 @@ function CreateRandomNumber()
     return number
 end
 
+--------------------------------------------------------------------------
+-- Checks if pager data is changed locally and updates the db
+--------------------------------------------------------------------------
 function UpdateDatabase()
 	for currentCitizenID, currentPagerData in pairs(pagersList) do
         local removedData = {}
@@ -254,6 +273,18 @@ RegisterNetEvent('96rp-pager:server:RemoveContact', function(number)
                 contacts[id].removed = true
             end
         end
+    end
+end)
+
+RegisterNetEvent('96rp-pager:server:PlayAnimation', function(withUseAnimation)
+    local src = source
+    local playerPed = GetPlayerPed(src)
+    if withUseAnimation then
+        TaskPlayAnim(playerPed, Config.Animations.getPagerOutOfPocket.dict, Config.Animations.getPagerOutOfPocket.name, 8.0, 8.0, Config.Animations.getPagerOutOfPocket.time, Config.Animations.getPagerOutOfPocket.flag, 0.0, false, false, false)
+        Wait(Config.Animations.getPagerOutOfPocket.time - 100)
+        TaskPlayAnim(playerPed, Config.Animations.usePager.dict, Config.Animations.usePager.name, 8.0, 8.0, Config.Animations.usePager.time, Config.Animations.usePager.flag, 0.0, false, false, false)
+    else
+        TaskPlayAnim(playerPed, Config.Animations.putPagerInPocket.dict, Config.Animations.putPagerInPocket.name, 8.0, 8.0, Config.Animations.putPagerInPocket.time, Config.Animations.putPagerInPocket.flag, 0.0, false, false, false)
     end
 end)
 

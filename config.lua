@@ -55,11 +55,28 @@ Config.Pager = {
     }
 };
 
-Config.Animation = {
-    dict = 'anim@amb@business@bgen@bgen_no_work@',
-    name = 'stand_phone_phoneputdown_wakeup_phone01',
-    flag = 0
+Config.Animations = {
+    usePager = {
+        dict = 'amb@code_human_wander_texting@male@base',--'amb@code_human_wander_texting_fat@male@idle_a',
+        name = 'base',
+        flag = 63,
+        time = -1,
+    },
+    getPagerOutOfPocket = {
+        dict = 'amb@code_human_wander_texting@male@enter',
+        name = 'enter',
+        flag = 63,
+        time = 2200
+    },
+    putPagerInPocket = {
+        dict = 'amb@code_human_wander_texting@male@exit',
+        name = 'exit',
+        flag = 63,
+        time = 2000
+    }
 }
+
+Config.PagerObj = 'prop_cs_mini_tv'
 
 Config.LogWebhook = "";
 

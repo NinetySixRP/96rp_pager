@@ -3,6 +3,7 @@ local contacts = {}
 local messages = {}
 local currentContact = 1
 local currentMessage = 1
+local currentPagerObj = 0
 
 --------------------------------------------------------------------------
 -- Gets pager data from server
@@ -119,6 +120,10 @@ AddEventHandler('onResourceStart', function(resourceName)
         return
     end
     GetPagerData()
+    lib.requestAnimDict(Config.Animations.usePager.dict)
+    lib.requestAnimDict(Config.Animations.getPagerOutOfPocket.dict)
+    lib.requestAnimDict(Config.Animations.putPagerInPocket.dict)
+    lib.requestModel(Config.PagerObj)
 end)
 
 --------------------------------------------------------------------------
@@ -149,6 +154,36 @@ RegisterNetEvent("96rp-pager:pager:show", function()
         action = "pagerShowMessageSimple"
     })
     currentMessage = #messages + 1
+
+    local playerPed = PlayerPedId()
+    if not IsPedInAnyVehicle(playerPed, false) then
+        TriggerServerEvent('96rp-pager:server:PlayAnimation', true)
+    end
+    while not IsEntityPlayingAnim(playerPed, Config.Animations.getPagerOutOfPocket.dict, Config.Animations.getPagerOutOfPocket.name, 3) do
+        Wait(100)
+    end
+    Wait(1000)
+    local playerCoords = GetEntityCoords(playerPed)
+    
+    if DoesEntityExist(currentPagerObj) then
+        DeleteEntity(currentPagerObj)
+    end
+    currentPagerObj = CreateObject(Config.PagerObj, playerCoords.x, playerCoords.y, playerCoords.z + 3, true, false, false)
+    local boneIndex = GetPedBoneIndex(playerPed, 28422)
+
+    local x = 0.0
+    local y = 0.0
+    local z = 0.0
+    local rotX = 0.0
+    local rotY = 0.0
+    local rotZ = 0.0
+    local p9 = false
+    local useSoftPinning = false
+    local collision = false
+    local isPed = false
+    local rotationorder = 2
+    local syncRotation = true
+    AttachEntityToEntity(currentPagerObj, playerPed, boneIndex, x, y, z, rotX, rotY, rotZ, p9, useSoftPinning, collision, isPed, rotationorder, syncRotation)
 end)
 
 --------------------------------------------------------------------------
@@ -156,6 +191,18 @@ end)
 --------------------------------------------------------------------------
 RegisterNUICallback('dismissPager', function(data, cb)
     SetNuiFocus(false, false)
+    local playerPed = PlayerPedId()
+    while not IsEntityPlayingAnim(playerPed, Config.Animations.usePager.dict, Config.Animations.usePager.name, 3) do
+        Wait(100)
+    end
+    StopAnimTask(playerPed, Config.Animations.usePager.dict, Config.Animations.usePager.name, 0.01)
+    if not IsPedInAnyVehicle(playerPed, false) then
+        TriggerServerEvent('96rp-pager:server:PlayAnimation', false)
+    end
+    Wait(Config.Animations.putPagerInPocket.time)
+    if DoesEntityExist(currentPagerObj) then
+        DeleteEntity(currentPagerObj)
+    end
     cb('')
 end)
 
@@ -163,7 +210,6 @@ end)
 -- Saves or Removes current contact
 --------------------------------------------------------------------------
 RegisterNUICallback('interactWithContact', function(pagerData, cb)
-    print(json.encode(pagerData))
     if pagerData.interaction == "save" then
         local message = messages[currentMessage]
         table.insert(contacts, {
@@ -225,7 +271,15 @@ RegisterNUICallback('showContactRight', function(data, cb)
     ShowContact(contact)
     cb('')
 end)
+
 --------------------------------------------------------------------------
 -- Keyboard interaction for closing pager
 --------------------------------------------------------------------------
 RegisterKeyMapping('dismisspager', 'Dismiss a pager', 'keyboard', 'x')
+
+--------------------------------------------------------------------------
+-- Closes NUI command for bugs from other scripts
+--------------------------------------------------------------------------
+RegisterCommand("closeNUI", function(source, args, rawCommand)
+	SetNuiFocus(false, false)
+end, false)
