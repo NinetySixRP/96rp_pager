@@ -109,6 +109,10 @@ end
 --------------------------------------------------------------------------
 AddEventHandler('QBCore:Client:OnPlayerLoaded', function() 
     GetPagerData()
+    lib.requestAnimDict(Config.Animations.usePager.dict)
+    lib.requestAnimDict(Config.Animations.getPagerOutOfPocket.dict)
+    lib.requestAnimDict(Config.Animations.putPagerInPocket.dict)
+    lib.requestModel(Config.PagerObj)
 end)
 
 --------------------------------------------------------------------------
@@ -120,10 +124,6 @@ AddEventHandler('onResourceStart', function(resourceName)
         return
     end
     GetPagerData()
-    lib.requestAnimDict(Config.Animations.usePager.dict)
-    lib.requestAnimDict(Config.Animations.getPagerOutOfPocket.dict)
-    lib.requestAnimDict(Config.Animations.putPagerInPocket.dict)
-    lib.requestModel(Config.PagerObj)
 end)
 
 --------------------------------------------------------------------------

@@ -5,7 +5,7 @@ local pagersList = {}
 -- Database updates
 --------------------------------------------------------------------------
 CreateThread(function()
-    local waitTime = 20000--600000
+    local waitTime = 3600000
     while true do
         print("--------------------------")
         print("update database check")
