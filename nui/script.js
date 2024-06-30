@@ -33,9 +33,9 @@ window.addEventListener('load', function () {
     function pagerShowMessageSimple(text){
         textElement.innerHTML = text;
         pagerElement.style.display = "block";
-        t=setTimeout(()=>{
-            grabAudio.play();
-        }, 300);
+        // t=setTimeout(()=>{
+        //     grabAudio.play();
+        // }, 300);
     }
 
     /* Shows the given text, plays an audio and closes the pager */
@@ -54,8 +54,8 @@ window.addEventListener('load', function () {
         pagerElement.style.display = "none";
         beepAudio.pause();
         beepAudio.load();
-        grabAudio.pause();
-        grabAudio.load();
+        // grabAudio.pause();
+        // grabAudio.load();
 
         saveContactElement.style.display = "none";
         reminderElement.style.display = "none";
