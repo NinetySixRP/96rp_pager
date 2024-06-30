@@ -54,6 +54,8 @@ window.addEventListener('load', function () {
         pagerElement.style.display = "none";
         beepAudio.pause();
         beepAudio.load();
+        grabAudio.pause();
+        grabAudio.load();
 
         saveContactElement.style.display = "none";
         reminderElement.style.display = "none";
