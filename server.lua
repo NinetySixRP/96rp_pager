@@ -5,7 +5,7 @@ local pagersList = {}
 -- Database updates
 --------------------------------------------------------------------------
 CreateThread(function()
-    local waitTime = 3600000
+    local waitTime = 5000
     while true do
         print("--------------------------")
         print("update database check")
@@ -276,12 +276,12 @@ RegisterNetEvent('96rp-pager:server:RemoveContact', function(number)
     end
 end)
 
-RegisterNetEvent('96rp-pager:server:PlayAnimation', function(withUseAnimation)
+RegisterNetEvent('96rp-pager:server:PlayAnimation', function(animation)
     local src = source
     local playerPed = GetPlayerPed(src)
-    if withUseAnimation then
+    if animation == 'getPagerOutOfPocket' then
         TaskPlayAnim(playerPed, Config.Animations.getPagerOutOfPocket.dict, Config.Animations.getPagerOutOfPocket.name, 8.0, 8.0, Config.Animations.getPagerOutOfPocket.time, Config.Animations.getPagerOutOfPocket.flag, 0.0, false, false, false)
-        Wait(Config.Animations.getPagerOutOfPocket.time - 100)
+    elseif animation == 'usePager' then
         TaskPlayAnim(playerPed, Config.Animations.usePager.dict, Config.Animations.usePager.name, 8.0, 8.0, Config.Animations.usePager.time, Config.Animations.usePager.flag, 0.0, false, false, false)
     else
         TaskPlayAnim(playerPed, Config.Animations.putPagerInPocket.dict, Config.Animations.putPagerInPocket.name, 8.0, 8.0, Config.Animations.putPagerInPocket.time, Config.Animations.putPagerInPocket.flag, 0.0, false, false, false)
@@ -316,96 +316,99 @@ RegisterCommand("pager", function(source, args, rawCommand)
         message = message .. " " .. args[i]
     end
 
-    local userFound = false
+    if message ~= nil then
 
-    for currentCitizenid, values in pairs(pagersList) do
+        local userFound = false
 
-        -- check if user exists (and is online too)
-        if values.number == tonumber(contact) then
-            local messages = pagersList[currentCitizenid].messages
-            local chatType = 'Private message'
+        for currentCitizenid, values in pairs(pagersList) do
 
-            table.insert(messages, #messages + 1, {
-                number = pagerUser.number,
-                chatType = chatType,
-                text = message,
-                isNew = true
-            })
-            
-            TriggerClientEvent('96rp-pager:pager:received', values.serverid, pagerUser.number, chatType, message)
-            userFound = true
-        end
-    end
+            -- check if user exists (and is online too)
+            if values.number == tonumber(contact) then
+                local messages = pagersList[currentCitizenid].messages
+                local chatType = 'Private message'
 
-    -- if user not found, check in config for dispatch services or groupchats
-    if not userFound then
-        local pagerTune = Config.Pager[contact];
-
-        if(pagerTune == nil) then
-            TriggerClientEvent('ox_lib:notify', source, {
-                type = 'error',
-                description = "The paged channel does not exist."
-            })
-            return false;
+                table.insert(messages, #messages + 1, {
+                    number = pagerUser.number,
+                    chatType = chatType,
+                    text = message,
+                    isNew = true
+                })
+                
+                TriggerClientEvent('96rp-pager:pager:received', values.serverid, pagerUser.number, chatType, message)
+                userFound = true
+            end
         end
 
-        local Player = exports.qbx_core:GetPlayer(source)
-        local authorized=false;
+        -- if user not found, check in config for dispatch services or groupchats
+        if not userFound then
+            local pagerTune = Config.Pager[contact];
 
-        if pagerTune.jobPermissions ~= nil then
-            for k,v in ipairs(pagerTune.jobPermissions) do
-                if(Player.PlayerData.jobs[v]) then
-                    authorized=true;
-                    break
+            if(pagerTune == nil) then
+                TriggerClientEvent('ox_lib:notify', source, {
+                    type = 'error',
+                    description = "The paged channel does not exist."
+                })
+                return false;
+            end
+
+            local Player = exports.qbx_core:GetPlayer(source)
+            local authorized=false;
+
+            if pagerTune.jobPermissions ~= nil then
+                for k,v in ipairs(pagerTune.jobPermissions) do
+                    if(Player.PlayerData.jobs[v]) then
+                        authorized=true;
+                        break
+                    end
+                end
+
+                if authorized == false then
+                    TriggerClientEvent('ox_lib:notify', source, {
+                        type = 'error',
+                        description = "You are not authenticated to broadcast on the paged channel."
+                    })
+                    return false;
+                end
+
+            end
+
+            if pagerTune.discordPermissions ~= nil then
+                authorized=exports["pv-discord-uac"]:doesUserHaveAnyRole(source,pagerTune.discordPermissions);
+
+                if authorized == false then
+                    TriggerClientEvent('ox_lib:notify', source, {
+                        type = 'error',
+                        description = "You are not authenticated to broadcast on the paged channel."
+                    })
+                    return false;
                 end
             end
+            
+            if pagerTune.jobPermissions == nil and pagerTune.discordPermissions == nil then authorized=true end
 
-            if authorized == false then
-                TriggerClientEvent('ox_lib:notify', source, {
-                    type = 'error',
-                    description = "You are not authenticated to broadcast on the paged channel."
-                })
-                return false;
-            end
-
-        end
-
-        if pagerTune.discordPermissions ~= nil then
-            authorized=exports["pv-discord-uac"]:doesUserHaveAnyRole(source,pagerTune.discordPermissions);
-
-            if authorized == false then
-                TriggerClientEvent('ox_lib:notify', source, {
-                    type = 'error',
-                    description = "You are not authenticated to broadcast on the paged channel."
-                })
-                return false;
-            end
-        end
-        
-        if pagerTune.jobPermissions == nil and pagerTune.discordPermissions == nil then authorized=true end
-
-        if authorized then
-            local players = exports.qbx_core:GetQBPlayers()
-            for _, v in pairs(players) do
-                if(pagerTune.broadcastToJobs[v.PlayerData.job.name]) then
-                    local number = pagersList[v.PlayerData.citizenid].number
-                    if(pagerTune.broadcastToRoles ~= nil) then
-                        if(exports["pv-discord-uac"]:doesUserHaveAnyRole(v.PlayerData.source,pagerTune.broadcastToRoles)) then
+            if authorized then
+                local players = exports.qbx_core:GetQBPlayers()
+                for _, v in pairs(players) do
+                    if(pagerTune.broadcastToJobs[v.PlayerData.job.name]) then
+                        local number = pagersList[v.PlayerData.citizenid].number
+                        if(pagerTune.broadcastToRoles ~= nil) then
+                            if(exports["pv-discord-uac"]:doesUserHaveAnyRole(v.PlayerData.source,pagerTune.broadcastToRoles)) then
+                                TriggerClientEvent("96rp-pager:pager:received",  v.PlayerData.source, number, contact, message);
+                            end
+                        else
                             TriggerClientEvent("96rp-pager:pager:received",  v.PlayerData.source, number, contact, message);
                         end
-                    else
-                        TriggerClientEvent("96rp-pager:pager:received",  v.PlayerData.source, number, contact, message);
-                    end
 
+                    end
                 end
             end
-        end
 
-        for k,v in ipairs(pagerTune.webhooks) do
-            SendToDiscord(k,pagerTune.title, message, v);
-        end
+            for k,v in ipairs(pagerTune.webhooks) do
+                SendToDiscord(k,pagerTune.title, message, v);
+            end
 
-        SendToDiscord(Config.LogWebhook,pagerTune.title, message, "New pager!",source,true);
+            SendToDiscord(Config.LogWebhook,pagerTune.title, message, "New pager!",source,true);
+        end
     end
 end, false)
 

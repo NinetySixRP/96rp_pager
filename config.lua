@@ -59,19 +59,19 @@ Config.Animations = {
     usePager = {
         dict = 'amb@code_human_wander_texting@male@base',--'amb@code_human_wander_texting_fat@male@idle_a',
         name = 'base',
-        flag = 63,
+        flag = 59,
         time = -1,
     },
     getPagerOutOfPocket = {
         dict = 'amb@code_human_wander_texting@male@enter',
         name = 'enter',
-        flag = 63,
+        flag = 59,
         time = 2200
     },
     putPagerInPocket = {
         dict = 'amb@code_human_wander_texting@male@exit',
         name = 'exit',
-        flag = 63,
+        flag = 59,
         time = 2000
     }
 }
